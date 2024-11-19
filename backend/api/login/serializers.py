@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..submodels.models_auth import User
+from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed

@@ -65,8 +65,6 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-AUTH_USER_MODEL = "api.User"
-
 CORS_ALLOWED_ORIGINS = [
    'http://localhost:3000', 
    'http://127.0.0.1:3000', 
@@ -148,6 +146,11 @@ REST_FRAMEWORK = {
     ),
 }
 
+GROUP_NAME = {
+    'SUPERADMIN': 'superadmin_group',
+    'MANAGER': 'manager_group',
+    'EMPLOYEE': 'employee_group'
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

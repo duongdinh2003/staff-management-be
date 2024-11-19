@@ -1,6 +1,6 @@
 import re
 from django.contrib.auth.backends import ModelBackend
-from ..submodels.models_auth import User
+from django.contrib.auth.models import User
 
 class EmailOrUsernameBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):

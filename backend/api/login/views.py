@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-from ..submodels.models_auth import User
+from django.contrib.auth.models import User, Group
 from .serializers import *
 
 
@@ -40,12 +40,16 @@ class LoginView(APIView):
             serializer = self.serializer_class(data=request.data)
             if serializer.is_valid():
                 user = serializer.validated_data['user']
-                
+                groups = Group.objects.filter(user=user)
+                _groups = []
+                for g in groups:
+                    _groups.append(g.name)
                 refresh = RefreshToken.for_user(user)
                 return Response(
                     {
                         'refresh': str(refresh),
                         'access': str(refresh.access_token),
+                        'groups': _groups
                     },
                     status=status.HTTP_200_OK
                 )
