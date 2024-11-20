@@ -112,3 +112,14 @@ class ApproveLeaveRequestSerializer(serializers.ModelSerializer):
         except Exception as error:
             print("reject_leave_request_error:", error)
             return None
+
+class TimeSheetSerializer(serializers.ModelSerializer):
+    shift = serializers.SerializerMethodField()
+    class Meta:
+        model = TimeSheet
+        fields = ['id','date','shift','check_in_time','check_out_time','status','is_overtime','overtime_hours','note']
+
+    def get_shift(self, obj):
+        if obj.shift:
+            return obj.shift.shift_type
+        return "OVERTIME"

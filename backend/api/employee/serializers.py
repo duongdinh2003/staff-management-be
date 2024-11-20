@@ -4,6 +4,7 @@ from ..submodels.models_employee import Department, Position, Employee
 from ..login.serializers import RegisterSerializer
 from django.contrib.auth.models import User, Group
 from django.conf import settings
+from django.core.mail import EmailMessage
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -20,6 +21,7 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
     user = RegisterSerializer()
     department_id = serializers.IntegerField(required=True)
     position_id = serializers.IntegerField(required=True)
+    email = serializers.EmailField(required=False)
 
     class Meta:
         model = Employee
@@ -31,6 +33,7 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
             'full_name',
             'address',
             'join_date',
+            'email'
         ]
     
     def validate_department_id(self, value):
@@ -45,6 +48,8 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
             user_serializer = RegisterSerializer(data=user_data)
             user_serializer.is_valid(raise_exception=True)
             user = user_serializer.save(request)
+            user.email = self.validated_data['email']
+            user.save()
 
             department_id = self.validated_data['department_id']
             position_id = self.validated_data['position_id']
@@ -64,6 +69,15 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
             )
             employee_group = Group.objects.get(name=settings.GROUP_NAME['EMPLOYEE'])
             employee_group.user_set.add(user)
+
+            email_msg = EmailMessage(
+                subject=settings.EMAIL_TITLE,
+                body=f'Your username is: {user.username}<br>Your password is: {user_data["password"]}',
+                from_email=settings.EMAIL_HOST_USER,
+                to=[user.email]
+            )
+            email_msg.content_subtype = "html"
+            email_msg.send()
             return employee
         except Exception as error:
             print("add_employee_profile_error:", error)
