@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from django.contrib.auth.models import User
 from ..submodels.models_employee import Department, Position, Employee
 from .serializers import *
+from ..permissions import IsManager, IsEmployee
 
 
 class DepartmentDropdownView(APIView):
@@ -26,9 +27,9 @@ class PositionDropDownView(APIView):
         serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)
 
-class EmployeeManagementMVS(viewsets.ModelViewSet):
-    serializer_class = EmployeeManagementSerializer
-    permission_classes = [IsAuthenticated]
+class EmployeeAccountMVS(viewsets.ModelViewSet):
+    serializer_class = EmployeeAccountSerializer
+    permission_classes = [IsAuthenticated, IsManager]
 
     @action(methods=['POST'], detail=False, url_path='create_employee_account', url_name='create_employee_account')
     def create_employee_account(self, request):
@@ -44,7 +45,7 @@ class EmployeeManagementMVS(viewsets.ModelViewSet):
 
 class UpdateEmployeeProfileView(APIView):
     serializer_class = UpdateEmployeeProfileSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEmployee]
 
     def post(self, request):
         try:
@@ -59,12 +60,29 @@ class UpdateEmployeeProfileView(APIView):
 
 class EmployeeProfileView(APIView):
     serializer_class = EmployeeProfileSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsEmployee]
 
     def get(self, request):
         try:
             profile = Employee.objects.get(user=request.user)
-            serializer = self.serializer_class(profile)
+            serializer = self.serializer_class(profile, context={'request': request})
             return Response(serializer.data)
         except Employee.DoesNotExist:
             return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class UploadEmployeeAvatarView(APIView):
+    serializer_class = UploadEmployeeAvatarSerializer
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def post(self, request):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            data = {}
+            if serializer.is_valid():
+                serializer.update_avatar(request)
+                data['message'] = 'Upload avatar successfully.'
+                return Response(data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            print("upload avatar error:", error)
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)

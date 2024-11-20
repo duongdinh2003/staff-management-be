@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator
+from datetime import datetime
+import os
 
 
 class Department(models.Model):
@@ -46,6 +48,14 @@ class Position(models.Model):
     def __str__(self):
         return self.name
 
+
+def upload_to_avatars_folder(instance, filename):
+    employee_id = instance.employee_id if instance.employee_id else 'unknown'
+    base_name, ext = os.path.splitext(filename)
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    new_filename = f"{base_name}_{timestamp}{ext}"
+    return f"avatars/employee_{employee_id}/{new_filename}"
+
 class Employee(models.Model):
     class Gender(models.TextChoices):
         MALE = 'M', _('Male')
@@ -61,6 +71,7 @@ class Employee(models.Model):
     gender = models.CharField(max_length=1, choices=Gender.choices, default=Gender.MALE)
     address = models.CharField(max_length=150, null=True, blank=True)
     phone_number = models.CharField(max_length=20, null=True, blank=True)
+    avatar = models.ImageField(upload_to=upload_to_avatars_folder, null=True, blank=True)
     join_date = models.DateField(null=True, blank=True)
     contract_end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)

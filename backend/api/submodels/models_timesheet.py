@@ -3,6 +3,8 @@ from django.contrib.auth.models import User
 from .models_employee import Employee
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
+from datetime import datetime
+import os
 
 
 class WorkingShift(models.Model):
@@ -87,7 +89,10 @@ class OvertimeRequest(models.Model):
 
 def upload_to_employee_folder(instance, filename):
     employee_id = instance.employee.employee_id if instance.employee.employee_id else 'unknown'
-    return f"leave_attachments/employee_{employee_id}/{filename}"
+    base_name, ext = os.path.splitext(filename)
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    new_filename = f"{base_name}_{timestamp}{ext}"
+    return f"leave_attachments/employee_{employee_id}/{new_filename}"
 
 class LeaveRequest(models.Model):
     class Status(models.TextChoices):

@@ -16,7 +16,7 @@ class PositionSerializer(serializers.ModelSerializer):
         model = Position
         fields = ['id', 'name']
 
-class EmployeeManagementSerializer(serializers.ModelSerializer):
+class EmployeeAccountSerializer(serializers.ModelSerializer):
     user = RegisterSerializer()
     department_id = serializers.IntegerField(required=True)
     position_id = serializers.IntegerField(required=True)
@@ -90,9 +90,9 @@ class UpdateEmployeeProfileSerializer(serializers.ModelSerializer):
             profile.date_of_birth = date_of_birth
             if gender == "Nam":
                 profile.gender = profile.Gender.MALE
-            if gender == "Nữ":
+            elif gender == "Nữ":
                 profile.gender = profile.Gender.FEMALE
-            if gender == "Khác":
+            else:
                 profile.gender = profile.Gender.OTHER
             profile.address = address
             profile.phone_number = phone_number
@@ -109,10 +109,23 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
     position = serializers.SerializerMethodField()
     gender = serializers.SerializerMethodField()
     email = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
-        fields = ['id','department','position','employee_id','full_name','date_of_birth','gender','address','phone_number','email']
+        fields = [
+            'id',
+            'department',
+            'position',
+            'employee_id',
+            'full_name',
+            'date_of_birth',
+            'gender',
+            'address',
+            'phone_number',
+            'email',
+            'avatar'
+        ]
 
     def get_department(self, obj):
         return obj.department.name
@@ -129,3 +142,27 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
     
     def get_email(self, obj):
         return obj.user.email
+    
+    def get_avatar(self, obj):
+        request = self.context.get('request')
+        if obj.avatar:
+            return request.build_absolute_uri(obj.avatar.url)
+        return None
+
+class UploadEmployeeAvatarSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=True)
+
+    class Meta:
+        model = Employee
+        fields = ['avatar']
+
+    def update_avatar(self, request):
+        try:
+            avatar = self.validated_data['avatar']
+            profile = Employee.objects.get(user=request.user)
+            profile.avatar = avatar
+            profile.save()
+            return profile
+        except Exception as error:
+            print("upload_employee_avatar_error:", error)
+            return None
