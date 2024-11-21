@@ -37,7 +37,12 @@ class ListItemPagination(PageNumberPagination):
             'results': data,
         })
 
+class TimeSheetPagination(PageNumberPagination):
+    page_size = 11
+    page_size_query_param = 'page_size'
+    max_page_size = 50
 
+# ============================================= Leave request =================================================
 class SendLeaveRequestView(APIView):
     serializer_class = SendLeaveRequestSerializer
     permission_classes = [IsAuthenticated, IsEmployee]
@@ -125,6 +130,8 @@ class ApproveLeaveRequestMVS(viewsets.ModelViewSet):
             print('reject leave request employee error:', error)
             return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+# ========================================= Timesheet =============================================
 class CheckInAPIView(APIView):
     permission_classes = [IsAuthenticated, IsEmployee]
 
@@ -227,3 +234,118 @@ class CheckOutAPIView(APIView):
         except Exception as error:
             print("check in error:", error)
             return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+class TimeSheetEmployeeMVS(viewsets.ModelViewSet):
+    serializer_class = TimeSheetSerializer
+    permission_classes = [IsAuthenticated, IsEmployee]
+    pagination_class = TimeSheetPagination
+
+    @action(methods=['GET'], detail=False, url_path='get_current_month_timesheet_employee', url_name='get_current_month_timesheet_employee')
+    def get_current_month_timesheet_employee(self, request):
+        try:
+            employee = Employee.objects.get(user=request.user)
+            current_time = timezone.now()
+            queryset = TimeSheet.objects.filter(
+                employee=employee,
+                date__year=current_time.year,
+                date__month=current_time.month,
+            ).order_by('date')
+
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.serializer_class(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.serializer_class(queryset, many=True)
+            return Response(serializer.data)
+        except Employee.DoesNotExist:
+            return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+# ============================================== Overtime request ===================================================
+class SendOvertimeRequestView(APIView):
+    serializer_class = SendOvertimeRequestSerializer
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def post(self, request):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            data = {}
+            if serializer.is_valid(raise_exception=True):
+                serializer.send_request(request)
+                data['message'] = 'Send overtime request successfully.'
+                return Response(data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            print("send overtime request error:", error)
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ListOvertimeRequestEmployeeView(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ListOvertimeRequestEmployeeSerializer
+    permission_classes = [IsAuthenticated, IsEmployee]
+    pagination_class = ListItemPagination
+
+    @action(methods=['GET'], detail=False, url_path='list_overtime_requests_employee', url_name='list_overtime_requests_employee')
+    def list_overtime_requests_employee(self, request):
+        try:
+            employee = Employee.objects.get(user=request.user)
+            queryset = OvertimeRequest.objects.filter(employee=employee).order_by('-created_at')
+
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.serializer_class(page, many=True, context={'request': request})
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.serializer_class(queryset, many=True, context={'request': request})
+            return Response(serializer.data)
+        except Employee.DoesNotExist:
+            return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class ListOvertimeRequestManagerView(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ListOvertimeRequestManagerSerializer
+    permission_classes = [IsAuthenticated, IsManager]
+    pagination_class = ListItemPagination
+
+    @action(methods=['GET'], detail=False, url_path='list_overtime_requests_manager', url_name='list_overtime_requests_manager')
+    def list_overtime_requests_manager(self, request):
+        queryset = OvertimeRequest.objects.filter(status=OvertimeRequest.Status.PENDING).order_by('-created_at')
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.serializer_class(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.serializer_class(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+class ApproveOvertimeRequestMVS(viewsets.ModelViewSet):
+    serializer_class = ApproveOvertimeRequestSerializer
+    permission_classes = [IsAuthenticated, IsManager]
+
+    @action(methods=['POST'], detail=False, url_path='approve_overtime_request', url_name='approve_overtime_request')
+    def approve_overtime_request(self, request):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            data = {}
+            if serializer.is_valid():
+                serializer.approve_request(request)
+                data['message'] = 'Approved overtime request of employee successfully.'
+                return Response(data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            print('approve overtime request employee error:', error)
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(methods=['POST'], detail=False, url_path='reject_overtime_request', url_name='reject_overtime_request')
+    def reject_overtime_request(self, request):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            data = {}
+            if serializer.is_valid():
+                serializer.reject_request(request)
+                data['message'] = 'Rejected overtime request of employee successfully.'
+                return Response(data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            print('reject overtime request employee error:', error)
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
