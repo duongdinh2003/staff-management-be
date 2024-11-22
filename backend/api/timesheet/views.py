@@ -219,6 +219,9 @@ class CheckOutAPIView(APIView):
 
             if not timesheet.check_in_time:
                 return Response({'message': 'You have not check in for this shift!'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if timesheet.check_out_time:
+                return Response({'message': 'You already checked out for this shift!'}, status=status.HTTP_400_BAD_REQUEST)
 
             shift_end_time = timezone.datetime.combine(current_date, shift.end_time)
             check_out_time = timezone.datetime.combine(current_date, current_time)
