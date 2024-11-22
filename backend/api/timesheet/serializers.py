@@ -45,7 +45,9 @@ class ListLeaveRequestEmployeeSerializer(serializers.ModelSerializer):
         fields = ['id', 'from_date', 'to_date', 'status', 'approved_by', 'approved_at', 'attachments', 'note']
     
     def get_approved_by(self, obj):
-        return "Manager"
+        if obj.approved_by:
+            return "Manager"
+        return None
     
     def get_attachments(self, obj):
         request = self.context.get('request')
@@ -166,7 +168,9 @@ class ListOvertimeRequestEmployeeSerializer(serializers.ModelSerializer):
         fields = ['id', 'date', 'from_time', 'to_time', 'status', 'approved_by', 'approved_at', 'note']
     
     def get_approved_by(self, obj):
-        return "Manager"
+        if obj.approved_by:
+            return "Manager"
+        return None
 
 class ListOvertimeRequestManagerSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()

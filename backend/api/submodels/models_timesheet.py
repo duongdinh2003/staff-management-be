@@ -52,7 +52,9 @@ class TimeSheet(models.Model):
         unique_together = ['employee', 'date', 'shift']
 
     def __str__(self):
-        return f"{self.shift.shift_type} {str(self.date)}: {self.employee.employee_id} - Status: {self.status}"
+        if self.shift:
+            return f"{self.shift.shift_type} {str(self.date)}: {self.employee.employee_id} - Status: {self.status}"
+        return f"Overtime {str(self.date)}: {self.employee.employee_id} - Status: {self.status}"
 
 
 class OvertimeRequest(models.Model):

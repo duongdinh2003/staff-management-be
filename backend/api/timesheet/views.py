@@ -9,7 +9,7 @@ from django.utils import timezone
 from ..submodels.models_timesheet import *
 from .serializers import *
 from ..permissions import IsManager, IsEmployee
-from datetime import time, timedelta
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 
@@ -41,6 +41,26 @@ class TimeSheetPagination(PageNumberPagination):
     page_size = 11
     page_size_query_param = 'page_size'
     max_page_size = 50
+
+    def get_paginated_response(self, data):
+        next_page = previous_page = None
+        if self.page.has_next():
+            next_page = self.page.next_page_number()
+        if self.page.has_previous():
+            previous_page = self.page.previous_page_number()
+        return Response({
+            'totalRows': self.page.paginator.count,
+            'page_size': self.page_size,
+            'current_page': self.page.number,
+            'next_page': next_page,
+            'previous_page': previous_page,
+            'links': {
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link(),
+            },
+            'results': data,
+        })
+
 
 # ============================================= Leave request =================================================
 class SendLeaveRequestView(APIView):
@@ -139,8 +159,8 @@ class CheckInAPIView(APIView):
         try:
             employee = Employee.objects.get(user=request.user)
             shift_type = request.data.get('shift_type')
-            current_time = timezone.now().time()
-            current_date = timezone.now().date()
+            current_time = timezone.localtime(timezone.now()).time()
+            current_date = timezone.localtime(timezone.now()).date()
 
             shift = WorkingShift.objects.get(shift_type=shift_type)
 
@@ -182,8 +202,8 @@ class CheckOutAPIView(APIView):
         try:
             employee = Employee.objects.get(user=request.user)
             shift_type = request.data.get('shift_type')
-            current_time = timezone.now().time()
-            current_date = timezone.now().date()
+            current_time = timezone.localtime(timezone.now()).time()
+            current_date = timezone.localtime(timezone.now()).date()
 
             shift = WorkingShift.objects.get(shift_type=shift_type)
 
@@ -226,7 +246,10 @@ class CheckOutAPIView(APIView):
                 timesheet.status = TimeSheet.Status.PRESENT
 
             timesheet.save()
-            return Response({'message': 'Check out successfully!', 'data': TimeSheetSerializer(timesheet).data})
+            data = {}
+            data['timesheet'] = TimeSheetSerializer(timesheet).data
+            data['early_leave_count'] = early_leave_count
+            return Response({'message': 'Check out successfully!', 'data': data})
         except Employee.DoesNotExist:
             return Response({'message': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
         except WorkingShift.DoesNotExist:
@@ -244,7 +267,7 @@ class TimeSheetEmployeeMVS(viewsets.ModelViewSet):
     def get_current_month_timesheet_employee(self, request):
         try:
             employee = Employee.objects.get(user=request.user)
-            current_time = timezone.now()
+            current_time = timezone.localtime(timezone.now())
             queryset = TimeSheet.objects.filter(
                 employee=employee,
                 date__year=current_time.year,
@@ -349,3 +372,74 @@ class ApproveOvertimeRequestMVS(viewsets.ModelViewSet):
         except Exception as error:
             print('reject overtime request employee error:', error)
             return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ============================================ Timesheet overtime ===============================================
+class OvertimeCheckInAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def post(self, request):
+        try:
+            employee = Employee.objects.get(user=request.user)
+            current_time = timezone.localtime(timezone.now()).time()
+            current_date = timezone.localtime(timezone.now()).date()
+
+            timesheet, created = TimeSheet.objects.get_or_create(
+                employee=employee,
+                date=current_date,
+                is_overtime=True
+            )
+
+            if timesheet.check_in_time:
+                return Response({'message': 'You already checked in for overtime!'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            timesheet.check_in_time = current_time
+            timesheet.status = TimeSheet.Status.INCOMPLETE
+            timesheet.save()
+
+            return Response({'message': 'Check in overtime successfully!', 'data': TimeSheetSerializer(timesheet).data})
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as error:
+            print("check in overtime error:", error)
+            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class OvertimeCheckOutAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsEmployee]
+
+    def post(self, request):
+        try:
+            employee = Employee.objects.get(user=request.user)
+            current_time = timezone.localtime(timezone.now()).time()
+            current_date = timezone.localtime(timezone.now()).date()
+
+            timesheet = TimeSheet.objects.filter(
+                employee=employee,
+                date=current_date,
+                is_overtime=True
+            ).first()
+
+            if not timesheet:
+                return Response({'message': 'You have not checked in overtime today!'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if timesheet.check_out_time:
+                return Response({'message': 'You have checked out overtime today!'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            timesheet.check_out_time = current_time
+
+            start_time = datetime.combine(current_date, timesheet.check_in_time)
+            end_time = datetime.combine(current_date, current_time)
+            delta = end_time - start_time
+            overtime_hours = delta.total_seconds() / 3600
+
+            timesheet.overtime_hours = round(overtime_hours, 2)
+            timesheet.status = TimeSheet.Status.PRESENT
+            timesheet.save()
+
+            return Response({'message': 'Check out overtime successfully!', 'data': TimeSheetSerializer(timesheet).data})
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as error:
+            print("check out overtime error:", error)
+            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)

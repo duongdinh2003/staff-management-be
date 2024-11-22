@@ -45,6 +45,8 @@ urlpatterns = [
     # Timesheet
     path('check_in/', CheckInAPIView.as_view(), name='check_in'),
     path('check_out/', CheckOutAPIView.as_view(), name='check_out'),
+    path('check_in_overtime/', OvertimeCheckInAPIView.as_view(), name='check_in_overtime'),
+    path('check_out_overtime/', OvertimeCheckOutAPIView.as_view(), name='check_out_overtime'),
     path('get_current_month_timesheet_employee/', get_current_month_timesheet_employee, name='get_current_month_timesheet_employee'),
 
     # Overtime request
