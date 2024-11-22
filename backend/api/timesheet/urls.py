@@ -33,6 +33,9 @@ list_overtime_requests_manager = ListOvertimeRequestManagerView.as_view({
 get_current_month_timesheet_employee = TimeSheetEmployeeMVS.as_view({
     'get': 'get_current_month_timesheet_employee'
 })
+get_daily_timesheet_employee = TimeSheetEmployeeMVS.as_view({
+    'get': 'get_daily_timesheet_employee'
+})
 
 urlpatterns = [
     # Leave request
@@ -47,6 +50,7 @@ urlpatterns = [
     path('check_out/', CheckOutAPIView.as_view(), name='check_out'),
     path('check_in_overtime/', OvertimeCheckInAPIView.as_view(), name='check_in_overtime'),
     path('check_out_overtime/', OvertimeCheckOutAPIView.as_view(), name='check_out_overtime'),
+    path('get_daily_timesheet_employee/', get_daily_timesheet_employee, name='get_daily_timesheet_employee'),
     path('get_current_month_timesheet_employee/', get_current_month_timesheet_employee, name='get_current_month_timesheet_employee'),
 
     # Overtime request

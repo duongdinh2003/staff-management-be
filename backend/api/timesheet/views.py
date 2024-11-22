@@ -11,6 +11,7 @@ from .serializers import *
 from ..permissions import IsManager, IsEmployee
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 
 
 class ListItemPagination(PageNumberPagination):
@@ -259,7 +260,7 @@ class CheckOutAPIView(APIView):
             return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
 class TimeSheetEmployeeMVS(viewsets.ModelViewSet):
-    serializer_class = TimeSheetSerializer
+    serializer_class = ShiftDetailSerializer
     permission_classes = [IsAuthenticated, IsEmployee]
     pagination_class = TimeSheetPagination
 
@@ -267,20 +268,57 @@ class TimeSheetEmployeeMVS(viewsets.ModelViewSet):
     def get_current_month_timesheet_employee(self, request):
         try:
             employee = Employee.objects.get(user=request.user)
-            current_time = timezone.localtime(timezone.now())
-            queryset = TimeSheet.objects.filter(
-                employee=employee,
-                date__year=current_time.year,
-                date__month=current_time.month,
-            ).order_by('date')
+            current_date = timezone.localtime(timezone.now()).date()
+            start_date = current_date.replace(day=1)
+            _, last_day = monthrange(current_date.year, current_date.month)
+            end_date = current_date.replace(day=last_day)
 
-            page = self.paginate_queryset(queryset)
-            if page is not None:
-                serializer = self.serializer_class(page, many=True)
-                return self.get_paginated_response(serializer.data)
-            
-            serializer = self.serializer_class(queryset, many=True)
-            return Response(serializer.data)
+            timesheets = TimeSheet.objects.filter(employee=employee, date__range=(start_date, end_date))
+
+            all_days = [
+                start_date + timedelta(days=n)
+                for n in range((end_date - start_date).days + 1)
+            ]
+
+            grouped_data = []
+            for single_date in all_days:
+                day_timesheets = timesheets.filter(date=single_date)
+                morning_shift = day_timesheets.filter(shift__shift_type=WorkingShift.ShiftType.MORNING).first()
+                afternoon_shift = day_timesheets.filter(shift__shift_type=WorkingShift.ShiftType.AFTERNOON).first()
+                overtime_shift = day_timesheets.filter(is_overtime=True).first()
+
+                grouped_data.append({
+                    "date": single_date,
+                    "morning_shift": self.serializer_class(morning_shift).data if morning_shift else None,
+                    "afternoon_shift": self.serializer_class(afternoon_shift).data if afternoon_shift else None,
+                    "overtime_shift": self.serializer_class(overtime_shift).data if overtime_shift else None,
+                })
+
+            paginator = self.pagination_class()
+            paginated_data = paginator.paginate_queryset(grouped_data, request)
+
+            return paginator.get_paginated_response(paginated_data)
+        except Employee.DoesNotExist:
+            return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(methods=['GET'], detail=False, url_path='get_daily_timesheet_employee', url_name='get_daily_timesheet_employee')
+    def get_daily_timesheet_employee(self, request):
+        try:
+            current_date = timezone.localtime(timezone.now()).date()
+            timesheets = TimeSheet.objects.filter(date=current_date)
+
+            morning_shift = timesheets.filter(shift__shift_type=WorkingShift.ShiftType.MORNING).first()
+            afternoon_shift = timesheets.filter(shift__shift_type=WorkingShift.ShiftType.AFTERNOON).first()
+            overtime_shift = timesheets.filter(is_overtime=True).first()
+
+            data = {
+                "date": current_date,
+                "morning_shift": self.serializer_class(morning_shift).data if morning_shift else None,
+                "afternoon_shift": self.serializer_class(afternoon_shift).data if afternoon_shift else None,
+                "overtime_shift": self.serializer_class(overtime_shift).data if overtime_shift else None,
+            }
+
+            return Response(data)
         except Employee.DoesNotExist:
             return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
 

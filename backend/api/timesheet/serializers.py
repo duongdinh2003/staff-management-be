@@ -130,6 +130,11 @@ class TimeSheetSerializer(serializers.ModelSerializer):
             return obj.shift.shift_type
         return "OVERTIME"
 
+class ShiftDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TimeSheet
+        fields = ['check_in_time','check_out_time','status','is_overtime','overtime_hours','note']
+
 class SendOvertimeRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = OvertimeRequest

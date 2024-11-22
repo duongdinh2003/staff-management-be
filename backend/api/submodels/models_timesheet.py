@@ -4,6 +4,7 @@ from .models_employee import Employee
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from datetime import datetime
+from decimal import Decimal
 import os
 
 
@@ -41,8 +42,8 @@ class TimeSheet(models.Model):
     overtime_hours = models.DecimalField(
         max_digits=4,
         decimal_places=2,
-        default=0,
-        validators=[MinValueValidator(0)]
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
     )
     note = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
