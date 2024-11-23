@@ -180,3 +180,53 @@ class UploadEmployeeAvatarSerializer(serializers.ModelSerializer):
         except Exception as error:
             print("upload_employee_avatar_error:", error)
             return None
+
+class EmployeeManagementSerializer(serializers.ModelSerializer):
+    department = serializers.SerializerMethodField()
+    position = serializers.SerializerMethodField()
+    gender = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Employee
+        fields = [
+            'id',
+            'department',
+            'position',
+            'employee_id',
+            'full_name',
+            'join_date',
+            'gender',
+            'address',
+            'phone_number',
+            'email'
+        ]
+
+    def get_department(self, obj):
+        return obj.department.name
+    
+    def get_position(self, obj):
+        return obj.position.name
+    
+    def get_gender(self, obj):
+        if obj.gender == Employee.Gender.MALE:
+            return "Nam"
+        if obj.gender == Employee.Gender.FEMALE:
+            return "Nữ"
+        return "Khác"
+    
+    def get_email(self, obj):
+        return obj.user.email
+    
+    def delete_account(self, request):
+        try:
+            employee_id = request.query_params.get('employee_id')
+            employee = Employee.objects.get(employee_id=employee_id)
+            employee.is_active = False
+            user = employee.user
+            user.is_active = False
+            employee.save()
+            user.save()
+            return True
+        except Employee.DoesNotExist:
+            return False

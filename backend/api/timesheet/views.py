@@ -7,6 +7,7 @@ from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.utils import timezone
 from ..submodels.models_timesheet import *
+from ..submodels.models_employee import Department
 from .serializers import *
 from ..permissions import IsManager, IsEmployee
 from datetime import datetime, timedelta
@@ -89,8 +90,15 @@ class ListLeaveRequestEmployeeView(viewsets.ReadOnlyModelViewSet):
     @action(methods=['GET'], detail=False, url_path='list_leave_requests_employee', url_name='list_leave_requests_employee')
     def list_leave_requests_employee(self, request):
         try:
+            current_date = timezone.localtime(timezone.now()).date()
+            start_of_month = current_date.replace(day=1)
+            end_of_month = (start_of_month + relativedelta(months=1)) - timedelta(days=1)
+
             employee = Employee.objects.get(user=request.user)
-            queryset = LeaveRequest.objects.filter(employee=employee).order_by('-created_at')
+            queryset = LeaveRequest.objects.filter(
+                employee=employee,
+                date__range=(start_of_month, end_of_month)
+            ).order_by('-created_at')
 
             page = self.paginate_queryset(queryset)
             if page is not None:
@@ -307,15 +315,26 @@ class TimeSheetEmployeeMVS(viewsets.ModelViewSet):
     @action(methods=['GET'], detail=False, url_path='get_daily_timesheet_employee', url_name='get_daily_timesheet_employee')
     def get_daily_timesheet_employee(self, request):
         try:
+            employee = Employee.objects.get(user=request.user)
             current_date = timezone.localtime(timezone.now()).date()
-            timesheets = TimeSheet.objects.filter(date=current_date)
+            timesheets = TimeSheet.objects.filter(employee=employee, date=current_date)
 
             morning_shift = timesheets.filter(shift__shift_type=WorkingShift.ShiftType.MORNING).first()
             afternoon_shift = timesheets.filter(shift__shift_type=WorkingShift.ShiftType.AFTERNOON).first()
             overtime_shift = timesheets.filter(is_overtime=True).first()
 
+            start_of_month = current_date.replace(day=1)
+            end_of_month = (start_of_month + relativedelta(months=1)) - timedelta(days=1)
+
+            early_leave_count = TimeSheet.objects.filter(
+                employee=employee,
+                date__range=(start_of_month, end_of_month),
+                status=TimeSheet.Status.EARLY_LEAVE
+            ).count()
+
             data = {
                 "date": current_date,
+                "early_leave_count": early_leave_count,
                 "morning_shift": self.serializer_class(morning_shift).data if morning_shift else None,
                 "afternoon_shift": self.serializer_class(afternoon_shift).data if afternoon_shift else None,
                 "overtime_shift": self.serializer_class(overtime_shift).data if overtime_shift else None,
@@ -352,8 +371,15 @@ class ListOvertimeRequestEmployeeView(viewsets.ReadOnlyModelViewSet):
     @action(methods=['GET'], detail=False, url_path='list_overtime_requests_employee', url_name='list_overtime_requests_employee')
     def list_overtime_requests_employee(self, request):
         try:
+            current_date = timezone.localtime(timezone.now()).date()
+            start_of_month = current_date.replace(day=1)
+            end_of_month = (start_of_month + relativedelta(months=1)) - timedelta(days=1)
+            
             employee = Employee.objects.get(user=request.user)
-            queryset = OvertimeRequest.objects.filter(employee=employee).order_by('-created_at')
+            queryset = OvertimeRequest.objects.filter(
+                employee=employee,
+                date__range=(start_of_month, end_of_month)
+            ).order_by('-created_at')
 
             page = self.paginate_queryset(queryset)
             if page is not None:
@@ -484,3 +510,28 @@ class OvertimeCheckOutAPIView(APIView):
         except Exception as error:
             print("check out overtime error:", error)
             return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TrackingTimeEmployeeManagementMVS(viewsets.ModelViewSet):
+    serializer_class = TrackingTimeEmployeeManagementSerializer
+    permission_classes = [IsAuthenticated, IsManager]
+    pagination_class = ListItemPagination
+
+    @action(methods=['GET'], detail=False, url_path='get_tracking_time_employee', url_name='get_tracking_time_employee')
+    def get_tracking_time_employee(self, request):
+        try:
+            department = request.query_params.get('department')
+            queryset = Employee.objects.filter(is_active=True).order_by('employee_id')
+            if department:
+                department = Department.objects.get(name=department)
+                queryset = queryset.filter(department=department)
+
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.serializer_class(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.serializer_class(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)

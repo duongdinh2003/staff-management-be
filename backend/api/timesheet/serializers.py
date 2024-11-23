@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from ..submodels.models_timesheet import *
 from django.utils import timezone
+from django.db.models import Q
 from datetime import datetime, timedelta
 
 
@@ -225,3 +226,88 @@ class ApproveOvertimeRequestSerializer(serializers.ModelSerializer):
         except Exception as error:
             print("reject_overtime_request_error:", error)
             return None
+
+
+# ============================================== Working hours Statistics =========================================
+def calculate_working_hours(check_in_time, check_out_time):
+    if check_in_time and check_out_time:
+        datetime_in = datetime.combine(datetime.today().date(), check_in_time)
+        datetime_out = datetime.combine(datetime.today().date(), check_out_time)
+        total_time = datetime_out - datetime_in
+        return total_time.total_seconds() / 3600
+    return 0
+
+class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
+    employee = serializers.SerializerMethodField()
+    working_days = serializers.SerializerMethodField()
+    regular_hours = serializers.SerializerMethodField()
+    overtime_hours = serializers.SerializerMethodField()
+    leave_days = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Employee
+        fields = ['employee', 'working_days', 'regular_hours', 'overtime_hours', 'leave_days']
+    
+    def get_employee(self, obj):
+        data = {}
+        data['id'] = obj.id
+        data['employee_id'] = obj.employee_id
+        data['department'] = obj.department.name
+        data['full_name'] = obj.full_name
+        return data
+    
+    def get_working_days(self, obj):
+        current_date = timezone.localtime(timezone.now()).date()
+        start_of_month = current_date.replace(day=1)
+        working_days = TimeSheet.objects.filter(
+            employee=obj,
+            date__range=(start_of_month, current_date),
+            status=TimeSheet.Status.PRESENT
+        ).distinct('date').count()
+        return working_days
+    
+    def get_regular_hours(self, obj):
+        current_date = timezone.localtime(timezone.now()).date()
+        start_of_month = current_date.replace(day=1)
+        timesheets = TimeSheet.objects.filter(
+            Q(employee=obj) &
+            Q(date__range=(start_of_month, current_date)) &
+            Q(status=TimeSheet.Status.PRESENT) &
+            Q(status=TimeSheet.Status.EARLY_LEAVE)
+        )
+        regular_hours = Decimal(0)
+        for timesheet in timesheets:
+            shift_hours = Decimal(calculate_working_hours(timesheet.check_in_time, timesheet.check_out_time))
+            regular_hours += shift_hours
+        
+        return regular_hours
+    
+    def get_overtime_hours(self, obj):
+        current_date = timezone.localtime(timezone.now()).date()
+        start_of_month = current_date.replace(day=1)
+        timesheets = TimeSheet.objects.filter(
+            employee=obj,
+            shift__isnull=True,
+            date__range=(start_of_month, current_date),
+            status=TimeSheet.Status.PRESENT
+        )
+        overtime_hours = Decimal(0)
+        for timesheet in timesheets:
+            overtime_hours += timesheet.overtime_hours
+        
+        return overtime_hours
+    
+    def get_leave_days(self, obj):
+        current_date = timezone.localtime(timezone.now()).date()
+        start_of_month = current_date.replace(day=1)
+        leave_requests = LeaveRequest.objects.filter(
+            employee=obj,
+            from_date__range=(start_of_month, current_date),
+            to_date__range=(start_of_month, current_date),
+            status=LeaveRequest.Status.APPROVED
+        )
+        leave_days = 0
+        for leave_request in leave_requests:
+            delta = leave_request.to_date - leave_request.from_date
+            leave_days += (delta.days + 1)
+        return leave_days

@@ -36,6 +36,9 @@ get_current_month_timesheet_employee = TimeSheetEmployeeMVS.as_view({
 get_daily_timesheet_employee = TimeSheetEmployeeMVS.as_view({
     'get': 'get_daily_timesheet_employee'
 })
+get_tracking_time_employee = TrackingTimeEmployeeManagementMVS.as_view({
+    'get': 'get_tracking_time_employee'
+})
 
 urlpatterns = [
     # Leave request
@@ -52,6 +55,7 @@ urlpatterns = [
     path('check_out_overtime/', OvertimeCheckOutAPIView.as_view(), name='check_out_overtime'),
     path('get_daily_timesheet_employee/', get_daily_timesheet_employee, name='get_daily_timesheet_employee'),
     path('get_current_month_timesheet_employee/', get_current_month_timesheet_employee, name='get_current_month_timesheet_employee'),
+    path('get_tracking_time_employee/', get_tracking_time_employee, name='get_tracking_time_employee'),
 
     # Overtime request
     path('send_overtime_request/', SendOvertimeRequestView.as_view(), name='send_overtime_request'),

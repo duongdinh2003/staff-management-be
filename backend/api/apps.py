@@ -7,3 +7,4 @@ class ApiConfig(AppConfig):
 
     def ready(self):
         import api.employee.signals
+        import api.salary.signals
