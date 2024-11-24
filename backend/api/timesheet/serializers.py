@@ -3,6 +3,7 @@ from ..submodels.models_timesheet import *
 from django.utils import timezone
 from django.db.models import Q
 from datetime import datetime, timedelta
+from dateutil.rrule import rrule, DAILY
 
 
 class SendLeaveRequestSerializer(serializers.ModelSerializer):
@@ -59,10 +60,11 @@ class ListLeaveRequestEmployeeSerializer(serializers.ModelSerializer):
 class ListLeaveRequestManagerSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
+    leave_request_count = serializers.SerializerMethodField()
 
     class Meta:
         model = LeaveRequest
-        fields = ['id', 'employee', 'from_date', 'to_date', 'status', 'approved_at', 'attachments', 'note']
+        fields = ['id','employee','from_date','to_date','status','approved_at','attachments','note','leave_request_count']
     
     def get_employee(self, obj):
         data = {}
@@ -77,6 +79,17 @@ class ListLeaveRequestManagerSerializer(serializers.ModelSerializer):
         if obj.attachments:
             return request.build_absolute_uri(obj.attachments.url)
         return None
+    
+    def get_leave_request_count(self, obj):
+        current_date = timezone.localtime(timezone.now()).date()
+        start_of_month = current_date.replace(day=1)
+        end_of_month = (start_of_month + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+        count = LeaveRequest.objects.filter(
+            Q(employee=obj.employee) &
+            Q(status=LeaveRequest.Status.APPROVED) &
+            Q(from_date__lte=end_of_month) & Q(to_date__gte=start_of_month)
+        ).count()
+        return count
 
 class ApproveLeaveRequestSerializer(serializers.ModelSerializer):
     leave_request_id = serializers.IntegerField(required=True)
@@ -237,56 +250,63 @@ def calculate_working_hours(check_in_time, check_out_time):
         return total_time.total_seconds() / 3600
     return 0
 
+def calculate_working_days(employee):
+    current_date = timezone.localtime(timezone.now()).date()
+    start_of_month = current_date.replace(day=1)
+    working_days = TimeSheet.objects.filter(
+        Q(employee=employee) &
+        Q(date__range=(start_of_month, current_date)) &
+        Q(shift__isnull=False) &
+        (Q(status=TimeSheet.Status.PRESENT) |
+        Q(status=TimeSheet.Status.EARLY_LEAVE))
+    ).count()
+    return working_days / 2
+
 class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
     employee = serializers.SerializerMethodField()
     working_days = serializers.SerializerMethodField()
     regular_hours = serializers.SerializerMethodField()
     overtime_hours = serializers.SerializerMethodField()
     leave_days = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
 
     class Meta:
-        model = Employee
-        fields = ['employee', 'working_days', 'regular_hours', 'overtime_hours', 'leave_days']
+        model = EmployeeEvaluation
+        fields = ['id','employee','working_days','regular_hours','overtime_hours','leave_days','content']
     
     def get_employee(self, obj):
         data = {}
-        data['id'] = obj.id
-        data['employee_id'] = obj.employee_id
-        data['department'] = obj.department.name
-        data['full_name'] = obj.full_name
+        data['id'] = obj.employee.id
+        data['employee_id'] = obj.employee.employee_id
+        data['department'] = obj.employee.department.name
+        data['full_name'] = obj.employee.full_name
         return data
     
     def get_working_days(self, obj):
-        current_date = timezone.localtime(timezone.now()).date()
-        start_of_month = current_date.replace(day=1)
-        working_days = TimeSheet.objects.filter(
-            employee=obj,
-            date__range=(start_of_month, current_date),
-            status=TimeSheet.Status.PRESENT
-        ).distinct('date').count()
+        working_days = calculate_working_days(obj.employee)
         return working_days
     
     def get_regular_hours(self, obj):
         current_date = timezone.localtime(timezone.now()).date()
         start_of_month = current_date.replace(day=1)
         timesheets = TimeSheet.objects.filter(
-            Q(employee=obj) &
+            Q(employee=obj.employee) &
             Q(date__range=(start_of_month, current_date)) &
-            Q(status=TimeSheet.Status.PRESENT) &
-            Q(status=TimeSheet.Status.EARLY_LEAVE)
+            (Q(status=TimeSheet.Status.PRESENT) |
+            Q(status=TimeSheet.Status.EARLY_LEAVE))
         )
         regular_hours = Decimal(0)
         for timesheet in timesheets:
             shift_hours = Decimal(calculate_working_hours(timesheet.check_in_time, timesheet.check_out_time))
             regular_hours += shift_hours
         
-        return regular_hours
+        return round(regular_hours, 2)
     
     def get_overtime_hours(self, obj):
         current_date = timezone.localtime(timezone.now()).date()
         start_of_month = current_date.replace(day=1)
         timesheets = TimeSheet.objects.filter(
-            employee=obj,
+            employee=obj.employee,
             shift__isnull=True,
             date__range=(start_of_month, current_date),
             status=TimeSheet.Status.PRESENT
@@ -300,14 +320,49 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
     def get_leave_days(self, obj):
         current_date = timezone.localtime(timezone.now()).date()
         start_of_month = current_date.replace(day=1)
+        end_of_month = (start_of_month + timedelta(days=31)).replace(day=1) - timedelta(days=1)
         leave_requests = LeaveRequest.objects.filter(
-            employee=obj,
-            from_date__range=(start_of_month, current_date),
-            to_date__range=(start_of_month, current_date),
-            status=LeaveRequest.Status.APPROVED
+            Q(employee=obj.employee) &
+            Q(status=LeaveRequest.Status.APPROVED) &
+            Q(from_date__lte=end_of_month) & Q(to_date__gte=start_of_month)
         )
         leave_days = 0
+        weekdays_count = 0
+        saturday_count = 0
         for leave_request in leave_requests:
-            delta = leave_request.to_date - leave_request.from_date
-            leave_days += (delta.days + 1)
+            start_date = max(leave_request.from_date, start_of_month)
+            end_date = min(leave_request.to_date, end_of_month)
+
+            for single_date in rrule(DAILY, dtstart=start_date, until=end_date):
+                weekday = single_date.weekday()
+                if weekday == 6:
+                    continue
+                elif weekday == 5:
+                    saturday_count += 1
+                else:
+                    weekdays_count += 1
+
+        leave_days += weekdays_count + saturday_count / 2
         return leave_days
+    
+    def get_content(self, obj):
+        current_date = timezone.localtime(timezone.now()).date()
+        start_of_month = current_date.replace(day=1)
+        end_of_month = (start_of_month + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+        if current_date == end_of_month:
+            return obj.content
+        return None
+    
+    def evaluate_employee(self, request):
+        try:
+            evaluation_id = request.data.get('evaluation_id')
+            content = request.data.get('content')
+            evaluation = EmployeeEvaluation.objects.get(id=evaluation_id)
+            evaluation.evaluated_by = request.user
+            evaluation.evaluated_at = timezone.localtime(timezone.now())
+            evaluation.content = content
+            evaluation.save()
+            return evaluation
+        except EmployeeEvaluation.DoesNotExist:
+            print("evaluation not found.")
+            return None

@@ -179,3 +179,29 @@ class SalaryRecord(models.Model):
     
     def __str__(self):
         return f"{self.employee.employee_id} - {str(self.month)}-{str(self.year)} - Salary: {str(self.gross_salary)}"
+
+
+class EmployeeEvaluation(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='evaluations')
+    evaluated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='evaluated_employees'
+    )
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+    month = models.PositiveSmallIntegerField(validators=[
+        MinValueValidator(1),
+        MaxValueValidator(12)
+    ])
+    year = models.PositiveIntegerField()
+    content = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['employee', 'month', 'year']
+
+    def __str__(self):
+        return f"{self.employee.employee_id} - {self.month}/{self.year}"

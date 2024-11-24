@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models import Q
 from ..submodels.models_timesheet import *
 from ..submodels.models_employee import Department
 from .serializers import *
@@ -107,6 +108,22 @@ class ListLeaveRequestEmployeeView(viewsets.ReadOnlyModelViewSet):
             
             serializer = self.serializer_class(queryset, many=True, context={'request': request})
             return Response(serializer.data)
+        except Employee.DoesNotExist:
+            return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(methods=['GET'], detail=False, url_path='get_leave_count_in_current_month', url_name='get_leave_count_in_current_month')
+    def get_leave_count_in_current_month(self, request):
+        try:
+            current_date = timezone.localtime(timezone.now()).date()
+            start_of_month = current_date.replace(day=1)
+            end_of_month = (start_of_month + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+            employee = Employee.objects.get(user=request.user)
+            leave_requests_count = LeaveRequest.objects.filter(
+                Q(employee=employee) &
+                Q(status=LeaveRequest.Status.APPROVED) &
+                Q(from_date__lte=end_of_month) & Q(to_date__gte=start_of_month)
+            ).count()
+            return Response({"leave_requests_count": leave_requests_count})
         except Employee.DoesNotExist:
             return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -521,10 +538,16 @@ class TrackingTimeEmployeeManagementMVS(viewsets.ModelViewSet):
     def get_tracking_time_employee(self, request):
         try:
             department = request.query_params.get('department')
-            queryset = Employee.objects.filter(is_active=True).order_by('employee_id')
+            month = request.query_params.get('month')
+            year = request.query_params.get('year')
+            queryset = EmployeeEvaluation.objects.filter(
+                employee__is_active=True
+            ).order_by('employee_id')
             if department:
                 department = Department.objects.get(name=department)
-                queryset = queryset.filter(department=department)
+                queryset = queryset.filter(employee__department=department)
+            if month and year:
+                queryset = queryset.filter(month=month, year=year)
 
             page = self.paginate_queryset(queryset)
             if page is not None:
@@ -534,4 +557,16 @@ class TrackingTimeEmployeeManagementMVS(viewsets.ModelViewSet):
             serializer = self.serializer_class(queryset, many=True)
             return Response(serializer.data)
         except Exception as error:
+            return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    @action(methods=['POST'], detail=False, url_path='manager_evaluate_employee', url_name='manager_evaluate_employee')
+    def manager_evaluate_employee(self, request):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            if serializer.is_valid():
+                serializer.evaluate_employee(request)
+                return Response({"message": "Evaluated employee successfully."})
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            print("error evaluate employee:", error)
             return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)

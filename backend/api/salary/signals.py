@@ -1,10 +1,10 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from decimal import Decimal
-from ..submodels.models_timesheet import TimeSheet, SalaryRecord
+from ..submodels.models_timesheet import TimeSheet, SalaryRecord, EmployeeEvaluation
 
 @receiver(post_save, sender=TimeSheet)
-def ensure_salary_record_exists(sender, instance, created, **kwargs):
+def create_monthly_record(sender, instance, created, **kwargs):
     if not instance.date:
         return
         
@@ -21,4 +21,10 @@ def ensure_salary_record_exists(sender, instance, created, **kwargs):
             'attendance_bonus': Decimal('0.00'),
             'gross_salary': Decimal('0.00')
         }
+    )
+
+    EmployeeEvaluation.objects.get_or_create(
+        employee=instance.employee,
+        month=month,
+        year=year
     )

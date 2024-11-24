@@ -11,6 +11,9 @@ reject_leave_request = ApproveLeaveRequestMVS.as_view({
 list_leave_requests_employee = ListLeaveRequestEmployeeView.as_view({
     'get': 'list_leave_requests_employee'
 })
+get_leave_count_in_current_month = ListLeaveRequestEmployeeView.as_view({
+    'get': 'get_leave_count_in_current_month'
+})
 list_leave_requests_manager = ListLeaveRequestManagerView.as_view({
     'get': 'list_leave_requests_manager'
 })
@@ -39,11 +42,15 @@ get_daily_timesheet_employee = TimeSheetEmployeeMVS.as_view({
 get_tracking_time_employee = TrackingTimeEmployeeManagementMVS.as_view({
     'get': 'get_tracking_time_employee'
 })
+manager_evaluate_employee = TrackingTimeEmployeeManagementMVS.as_view({
+    'post': 'manager_evaluate_employee'
+})
 
 urlpatterns = [
     # Leave request
     path('send_leave_request/', SendLeaveRequestView.as_view(), name='send_leave_request'),
     path('list_leave_requests_employee/', list_leave_requests_employee, name='list_leave_requests_employee'),
+    path('get_leave_count_in_current_month/', get_leave_count_in_current_month, name='get_leave_count_in_current_month'),
     path('list_leave_requests_manager/', list_leave_requests_manager, name='list_leave_requests_manager'),
     path('approve_leave_request/', approve_leave_request, name='approve_leave_request'),
     path('reject_leave_request/', reject_leave_request, name='reject_leave_request'),
@@ -56,6 +63,7 @@ urlpatterns = [
     path('get_daily_timesheet_employee/', get_daily_timesheet_employee, name='get_daily_timesheet_employee'),
     path('get_current_month_timesheet_employee/', get_current_month_timesheet_employee, name='get_current_month_timesheet_employee'),
     path('get_tracking_time_employee/', get_tracking_time_employee, name='get_tracking_time_employee'),
+    path('manager_evaluate_employee/', manager_evaluate_employee, name='manager_evaluate_employee'),
 
     # Overtime request
     path('send_overtime_request/', SendOvertimeRequestView.as_view(), name='send_overtime_request'),
