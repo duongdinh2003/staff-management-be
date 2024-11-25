@@ -185,8 +185,13 @@ class CheckInAPIView(APIView):
         try:
             employee = Employee.objects.get(user=request.user)
             shift_type = request.data.get('shift_type')
-            current_time = timezone.localtime(timezone.now()).time()
-            current_date = timezone.localtime(timezone.now()).date()
+
+            current = timezone.localtime(timezone.now())
+            if (shift_type == 'AFTERNOON' and current.weekday() == 5) or current.weekday() == 6:
+                return Response({"message": "This is not the time to check in this shift."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            current_time = current.time()
+            current_date = current.date()
 
             shift = WorkingShift.objects.get(shift_type=shift_type)
 
@@ -206,9 +211,11 @@ class CheckInAPIView(APIView):
             if not created:
                 if timesheet.check_in_time:
                     return Response({'message': 'You already checked in for this shift!'}, status=status.HTTP_400_BAD_REQUEST)
-
-                timesheet.check_in_time = current_time
-                timesheet.status = TimeSheet.Status.INCOMPLETE
+            else:
+                start_time = timezone.datetime.combine(current_date, shift.start_time)
+                start_time = timezone.make_aware(start_time)
+                if current > (start_time + timedelta(minutes=15)):
+                    timesheet.status = TimeSheet.Status.LATE
                 timesheet.save()
 
             return Response({'message': 'Check in successfully!', 'data': TimeSheetSerializer(timesheet).data})
@@ -269,10 +276,11 @@ class CheckOutAPIView(APIView):
             
             timesheet.check_out_time = current_time
 
-            if minutes_early > 0:
-                timesheet.status = TimeSheet.Status.EARLY_LEAVE
-            else:
-                timesheet.status = TimeSheet.Status.PRESENT
+            if not timesheet.status == TimeSheet.Status.LATE:
+                if minutes_early > 0:
+                    timesheet.status = TimeSheet.Status.EARLY_LEAVE
+                else:
+                    timesheet.status = TimeSheet.Status.PRESENT
 
             timesheet.save()
             data = {}
@@ -467,6 +475,14 @@ class OvertimeCheckInAPIView(APIView):
             employee = Employee.objects.get(user=request.user)
             current_time = timezone.localtime(timezone.now()).time()
             current_date = timezone.localtime(timezone.now()).date()
+
+            overtime_request = OvertimeRequest.objects.filter(
+                employee=employee,
+                date=current_date,
+                status=OvertimeRequest.Status.APPROVED
+            ).first()
+            if not overtime_request:
+                return Response({"message": "Cannot check in with unregistered overtime."}, status=status.HTTP_400_BAD_REQUEST)
 
             timesheet, created = TimeSheet.objects.get_or_create(
                 employee=employee,
