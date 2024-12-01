@@ -567,10 +567,10 @@ class TrackingTimeEmployeeManagementMVS(viewsets.ModelViewSet):
 
             page = self.paginate_queryset(queryset)
             if page is not None:
-                serializer = self.serializer_class(page, many=True)
+                serializer = self.serializer_class(page, many=True, context={'month': int(month), 'year': int(year)})
                 return self.get_paginated_response(serializer.data)
             
-            serializer = self.serializer_class(queryset, many=True)
+            serializer = self.serializer_class(queryset, many=True, context={'month': int(month), 'year': int(year)})
             return Response(serializer.data)
         except Exception as error:
             return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)

@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import datetime, timedelta
 from dateutil.rrule import rrule, DAILY
+import calendar
 
 
 class SendLeaveRequestSerializer(serializers.ModelSerializer):
@@ -250,12 +251,13 @@ def calculate_working_hours(check_in_time, check_out_time):
         return total_time.total_seconds() / 3600
     return 0
 
-def calculate_working_days(employee):
-    current_date = timezone.localtime(timezone.now()).date()
-    start_of_month = current_date.replace(day=1)
+def calculate_working_days(employee, month, year):
+    start_of_month = datetime(year, month, 1).date()
+    _, last_day_num = calendar.monthrange(year, month)
+    end_of_month=  datetime(year, month, last_day_num).date()
     working_days = TimeSheet.objects.filter(
         Q(employee=employee) &
-        Q(date__range=(start_of_month, current_date)) &
+        Q(date__range=(start_of_month, end_of_month)) &
         Q(shift__isnull=False) &
         (Q(status=TimeSheet.Status.PRESENT) |
         Q(status=TimeSheet.Status.EARLY_LEAVE))
@@ -283,15 +285,22 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
         return data
     
     def get_working_days(self, obj):
-        working_days = calculate_working_days(obj.employee)
+        current_date = timezone.localtime(timezone.now()).date()
+        month = self.context.get('month', current_date.month)
+        year = self.context.get('year', current_date.year)
+        working_days = calculate_working_days(obj.employee, month, year)
         return working_days
     
     def get_regular_hours(self, obj):
         current_date = timezone.localtime(timezone.now()).date()
-        start_of_month = current_date.replace(day=1)
+        month = self.context.get('month', current_date.month)
+        year = self.context.get('year', current_date.year)
+        start_of_month = datetime(year, month, 1).date()
+        _, last_day_num = calendar.monthrange(year, month)
+        end_of_month=  datetime(year, month, last_day_num).date()
         timesheets = TimeSheet.objects.filter(
             Q(employee=obj.employee) &
-            Q(date__range=(start_of_month, current_date)) &
+            Q(date__range=(start_of_month, end_of_month)) &
             (Q(status=TimeSheet.Status.PRESENT) |
             Q(status=TimeSheet.Status.EARLY_LEAVE))
         )
@@ -304,11 +313,15 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
     
     def get_overtime_hours(self, obj):
         current_date = timezone.localtime(timezone.now()).date()
-        start_of_month = current_date.replace(day=1)
+        month = self.context.get('month', current_date.month)
+        year = self.context.get('year', current_date.year)
+        start_of_month = datetime(year, month, 1).date()
+        _, last_day_num = calendar.monthrange(year, month)
+        end_of_month=  datetime(year, month, last_day_num).date()
         timesheets = TimeSheet.objects.filter(
             employee=obj.employee,
             shift__isnull=True,
-            date__range=(start_of_month, current_date),
+            date__range=(start_of_month, end_of_month),
             status=TimeSheet.Status.PRESENT
         )
         overtime_hours = Decimal(0)
@@ -319,8 +332,11 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
     
     def get_leave_days(self, obj):
         current_date = timezone.localtime(timezone.now()).date()
-        start_of_month = current_date.replace(day=1)
-        end_of_month = (start_of_month + timedelta(days=31)).replace(day=1) - timedelta(days=1)
+        month = self.context.get('month', current_date.month)
+        year = self.context.get('year', current_date.year)
+        start_of_month = datetime(year, month, 1).date()
+        _, last_day_num = calendar.monthrange(year, month)
+        end_of_month=  datetime(year, month, last_day_num).date()
         leave_requests = LeaveRequest.objects.filter(
             Q(employee=obj.employee) &
             Q(status=LeaveRequest.Status.APPROVED) &

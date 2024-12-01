@@ -52,10 +52,8 @@ class MonthlySalaryRecordForManagerMVS(viewsets.ModelViewSet):
             month = request.query_params.get('month')
             year = request.query_params.get('year')
 
-            current_date = timezone.localtime(timezone.now()).date()
             salary_records = SalaryRecord.objects.filter(
-                month=current_date.month,
-                year=current_date.year
+                employee__is_active=True
             ).order_by('employee__employee_id')
             if department:
                 department = Department.objects.get(name=department)
