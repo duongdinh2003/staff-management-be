@@ -254,7 +254,7 @@ def calculate_working_hours(check_in_time, check_out_time):
 def calculate_working_days(employee, month, year):
     start_of_month = datetime(year, month, 1).date()
     _, last_day_num = calendar.monthrange(year, month)
-    end_of_month=  datetime(year, month, last_day_num).date()
+    end_of_month = datetime(year, month, last_day_num).date()
     working_days = TimeSheet.objects.filter(
         Q(employee=employee) &
         Q(date__range=(start_of_month, end_of_month)) &
@@ -297,7 +297,7 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
         year = self.context.get('year', current_date.year)
         start_of_month = datetime(year, month, 1).date()
         _, last_day_num = calendar.monthrange(year, month)
-        end_of_month=  datetime(year, month, last_day_num).date()
+        end_of_month = datetime(year, month, last_day_num).date()
         timesheets = TimeSheet.objects.filter(
             Q(employee=obj.employee) &
             Q(date__range=(start_of_month, end_of_month)) &
@@ -317,7 +317,7 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
         year = self.context.get('year', current_date.year)
         start_of_month = datetime(year, month, 1).date()
         _, last_day_num = calendar.monthrange(year, month)
-        end_of_month=  datetime(year, month, last_day_num).date()
+        end_of_month = datetime(year, month, last_day_num).date()
         timesheets = TimeSheet.objects.filter(
             employee=obj.employee,
             shift__isnull=True,
@@ -336,7 +336,7 @@ class TrackingTimeEmployeeManagementSerializer(serializers.ModelSerializer):
         year = self.context.get('year', current_date.year)
         start_of_month = datetime(year, month, 1).date()
         _, last_day_num = calendar.monthrange(year, month)
-        end_of_month=  datetime(year, month, last_day_num).date()
+        end_of_month = datetime(year, month, last_day_num).date()
         leave_requests = LeaveRequest.objects.filter(
             Q(employee=obj.employee) &
             Q(status=LeaveRequest.Status.APPROVED) &
