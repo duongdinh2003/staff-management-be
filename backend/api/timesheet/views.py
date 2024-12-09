@@ -98,7 +98,8 @@ class ListLeaveRequestEmployeeView(viewsets.ReadOnlyModelViewSet):
             employee = Employee.objects.get(user=request.user)
             queryset = LeaveRequest.objects.filter(
                 employee=employee,
-                date__range=(start_of_month, end_of_month)
+                from_date__lte=end_of_month,
+                to_date__gte=start_of_month
             ).order_by('-created_at')
 
             page = self.paginate_queryset(queryset)
