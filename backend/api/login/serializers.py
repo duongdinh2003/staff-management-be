@@ -7,11 +7,12 @@ from rest_framework.exceptions import AuthenticationFailed
 
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True)
 
     class Meta:
         model = User
-        fields = ['username', 'password']
+        fields = ['username', 'email', 'password']
         extra_kwargs = {
             'password': {'write_only': True}
         }
@@ -21,10 +22,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Username already exists.')
         return value
     
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('Email already exists.')
+        return value
+    
     def save(self, request):
         username = self.validated_data['username']
+        email = self.validated_data['email']
         password = self.validated_data['password']
-        user = User.objects.create_user(username=username, password=password)
+        user = User.objects.create_user(username=username, email=email, password=password)
         return user
 
 class LoginSerializer(serializers.ModelSerializer):

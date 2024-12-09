@@ -21,7 +21,6 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
     user = RegisterSerializer()
     department_id = serializers.IntegerField(required=True)
     position_id = serializers.IntegerField(required=True)
-    email = serializers.EmailField(required=False)
 
     class Meta:
         model = Employee
@@ -32,8 +31,7 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
             'position_id',
             'full_name',
             'address',
-            'join_date',
-            'email'
+            'join_date'
         ]
     
     def validate_department_id(self, value):
@@ -48,8 +46,6 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
             user_serializer = RegisterSerializer(data=user_data)
             user_serializer.is_valid(raise_exception=True)
             user = user_serializer.save(request)
-            user.email = self.validated_data['email']
-            user.save()
 
             department_id = self.validated_data['department_id']
             position_id = self.validated_data['position_id']
